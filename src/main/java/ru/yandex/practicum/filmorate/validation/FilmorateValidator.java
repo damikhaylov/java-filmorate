@@ -1,6 +1,9 @@
 package ru.yandex.practicum.filmorate.validation;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.Errors;
+import org.springframework.validation.FieldError;
+import org.springframework.validation.ObjectError;
 import ru.yandex.practicum.filmorate.model.Film;
 import ru.yandex.practicum.filmorate.model.User;
 
@@ -9,26 +12,23 @@ import java.time.LocalDate;
 @Slf4j
 public class FilmorateValidator {
 
-    // TODO Комментарий для код-ревью (удалить после спринта 8) — валидация реализована исходя из следующмх соображений.
+    // TODO Комментарий для код-ревью (удалить после спринта 8) — валидация реализована исходя из следующих соображений.
     //  Хотелось получать в лог предупреждения обо все ошибках в переданном наборе данных, поэтому исключение
     //  не бросается сразу после выявления первой ошибки. Хотелось, помимо предупреждений в лог о каждой ошибке
     //  валидации в наборе данных, получить итоговое сообщение в лог об ошибке операции с данными от класса контроллера.
     //  Исключение должно выбрасываться в мэппингах контроллера, чтобы @RestController сам сформировал ответ с кодами
     //  ошибок.
+    //  ++ Заменил собственные проверки валидацией Spring, где это было возможно, но сделал для них и для оставшихся
+    //  собственных проверок общее логирование и дальнейшую обработку.
 
-    public static boolean validateUser(User user) {
+    public static boolean validateUser(User user, Errors springValidationErrors) {
+        springValidationErrors.getGlobalErrors().forEach(FilmorateValidator::logSpringValidationGlobalError);
+        springValidationErrors.getFieldErrors().forEach(FilmorateValidator::logSpringValidationFieldError);
 
-        boolean isValidLogin = null != user.getLogin() && !user.getLogin().isEmpty() && !user.getLogin().contains(" ");
-        logWarning("Логин '{}' не должен быть пустым или содержать пробелы", user.getLogin(), isValidLogin);
+        boolean isValidLogin = null != user.getLogin() && !user.getLogin().contains(" ");
+        logValidationWarning("Поле login '{}' не должно содержать пробелы", user.getLogin(), isValidLogin);
 
-        boolean isValidEmail = null != user.getEmail() && user.getEmail().contains("@");
-        logWarning("Email {} должен содержать символ @", user.getEmail(), isValidEmail);
-
-        boolean isValidBirthday = null == user.getBirthday() || user.getBirthday().isBefore(LocalDate.now());
-        logWarning("День рождения пользователя {} не должен быть в будущем", user.getBirthday(),
-                isValidBirthday);
-
-        boolean isValidUser = isValidLogin && isValidEmail && isValidBirthday;
+        boolean isValidUser = !springValidationErrors.hasErrors() && isValidLogin;
 
         if (isValidUser) {
             validateUserName(user);
@@ -37,30 +37,31 @@ public class FilmorateValidator {
         return isValidUser;
     }
 
-    public static boolean validateFilm(Film film) {
-
-        boolean isValidName = null != film.getName() && !film.getName().isEmpty();
-        logWarning("Название фильма '{}' не должно быть пустым", film.getName(), isValidName);
-
-        boolean isValidDescription = null == film.getDescription() || film.getDescription().length() <= 200;
-        logWarning("Длина описания фильма — {}, максимальная длина — 200 символов",
-                (null != film.getDescription()) ? film.getDescription().length() : null, isValidDescription);
+    public static boolean validateFilm(Film film, Errors springValidationErrors) {
+        springValidationErrors.getGlobalErrors().forEach(FilmorateValidator::logSpringValidationGlobalError);
+        springValidationErrors.getFieldErrors().forEach(FilmorateValidator::logSpringValidationFieldError);
 
         boolean isValidRelease = null == film.getReleaseDate()
                 || film.getReleaseDate().isAfter(LocalDate.of(1895, 12, 27));
-        logWarning("Дата релиза фильиа {} должна быть не раньше 28.12.1895", film.getReleaseDate(),
+        logValidationWarning("Дата релиза фильма {} должна быть не раньше 28.12.1895", film.getReleaseDate(),
                 isValidRelease);
 
-        boolean isValidDuration = film.getDuration() > 0;
-        logWarning("Продолжительность фильма '{}' должна быть больше 0", film.getDuration(), isValidDuration);
-
-        return isValidName && isValidDescription && isValidRelease && isValidDuration;
+        return !springValidationErrors.hasErrors() && isValidRelease;
     }
 
-    private static void logWarning(String message, Object parameter, boolean condition) {
+    private static void logValidationWarning(String message, Object parameter, boolean condition) {
         if (!condition) {
             log.warn("Ошибка валидации данных: " + message, parameter);
         }
+    }
+
+    private static void logSpringValidationGlobalError(ObjectError error) {
+        log.warn("Ошибка валидации данных (Spring): {}", error.getDefaultMessage());
+    }
+
+    private static void logSpringValidationFieldError(FieldError error) {
+        log.warn("Ошибка валидации данных (Spring): Поле {} '{}' {}",
+                error.getField(), error.getRejectedValue(), error.getDefaultMessage());
     }
 
     private static void validateUserName(User user) {
