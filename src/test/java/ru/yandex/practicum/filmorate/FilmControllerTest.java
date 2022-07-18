@@ -7,19 +7,18 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
-import org.springframework.web.util.NestedServletException;
 import ru.yandex.practicum.filmorate.controller.FilmController;
 
 import java.time.LocalDate;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 @WebMvcTest(controllers = FilmController.class)
+@ComponentScan(basePackages = {"ru.yandex.practicum.filmorate"})
 public class FilmControllerTest {
     @Autowired
     MockMvc mockMvc;
@@ -40,7 +39,7 @@ public class FilmControllerTest {
     }
 
     @DisplayName("Тест на добавление фильма с неверным в целом запросом")
-    @ParameterizedTest(name = "{index} При неверном запросе сервер возвращает ошибку ")
+    @ParameterizedTest(name = "{index} При неверном запросе сервер должен возвращать ошибку BadRequest")
     @MethodSource("filmBadRequest")
     void addBadRequest(String request) throws Exception {
 
@@ -51,19 +50,17 @@ public class FilmControllerTest {
     }
 
     @DisplayName("Тест валидации неверных данных при добавлении фильма")
-    @ParameterizedTest(name = "{index} Неверные данные фильма должны вызывать исключение")
+    @ParameterizedTest(name = "{index} При невалидных данные фильма сервер должен возвращать ошибку BadRequest")
     @MethodSource("filmInvalidParameters")
-    void addInvalidFilmTest(long id, String name, String description, LocalDate release, int duration) {
+    void addInvalidFilmTest(long id, String name, String description, LocalDate release, int duration)
+            throws Exception {
 
         String filmJson = getFilmJson(id, name, description, release, duration);
 
-        NestedServletException exception = assertThrows(NestedServletException.class, ()
-                -> mockMvc.perform(MockMvcRequestBuilders.post("/films")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(filmJson)));
-
-        assertTrue(exception.getMessage() != null
-                && exception.getMessage().contains("Данные фильма содержат ошибки и не были добавлены."));
+        mockMvc.perform(MockMvcRequestBuilders.post("/films")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(filmJson))
+                .andExpect(MockMvcResultMatchers.status().isBadRequest());
     }
 
     @DisplayName("Тест обновления фильма с валидными данными")
@@ -83,7 +80,7 @@ public class FilmControllerTest {
     }
 
     @DisplayName("Тест на обновление фильма с неверным в целом запросом")
-    @ParameterizedTest(name = "{index} При неверном запросе '{0}' сервер возвращает ошибку ")
+    @ParameterizedTest(name = "{index} При неверном запросе '{0}' сервер должен возвращать ошибку BadRequest")
     @MethodSource("filmBadRequest")
     void updateBadRequest(String request) throws Exception {
 
@@ -96,7 +93,7 @@ public class FilmControllerTest {
     }
 
     @DisplayName("Тест валидации неверных данных при обновлении фильма")
-    @ParameterizedTest(name = "{index} Неверные данные фильма должны вызывать исключение")
+    @ParameterizedTest(name = "{index} При невалидных данных фильма сервер должен возвращать ошибку BadRequest")
     @MethodSource("filmInvalidParameters")
     void updateInvalidFilmTest(long id, String name, String description, LocalDate release, int duration)
             throws Exception {
@@ -105,17 +102,14 @@ public class FilmControllerTest {
 
         String filmJson = getFilmJson(id, name, description, release, duration);
 
-        NestedServletException exception = assertThrows(NestedServletException.class, ()
-                -> mockMvc.perform(MockMvcRequestBuilders.put("/films")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(filmJson)));
-
-        assertTrue(exception.getMessage() != null
-                && exception.getMessage().contains("Данные фильма содержат ошибки и не были обновлены."));
+        mockMvc.perform(MockMvcRequestBuilders.put("/films")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(filmJson))
+                .andExpect(MockMvcResultMatchers.status().isBadRequest());
     }
 
     @DisplayName("Тест обновления фильма с несуществующим id")
-    @ParameterizedTest(name = "{index} Обновление с несуществующим id = {0} должно вызывать исключение")
+    @ParameterizedTest(name = "{index} При обновлении с несуществующим id = {0} сервер должен возвращать ошибку 404")
     @MethodSource("filmInvalidIdParameters")
     void updateNonExistentId(long id) throws Exception {
 
@@ -123,13 +117,10 @@ public class FilmControllerTest {
 
         String filmJson = getFilmJson(id, "Tesfilm", "Test description", REGULAR_DATE, 120);
 
-        NestedServletException exception = assertThrows(NestedServletException.class, ()
-                -> mockMvc.perform(MockMvcRequestBuilders.put("/films")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(filmJson)));
-
-        assertTrue(exception.getMessage() != null
-                && exception.getMessage().contains(String.format("Фильм с id=%d не существует.", id)));
+        mockMvc.perform(MockMvcRequestBuilders.put("/films")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(filmJson))
+                .andExpect(MockMvcResultMatchers.status().isNotFound());
     }
 
     @DisplayName("Тест запроса на получение списка фильмов")
